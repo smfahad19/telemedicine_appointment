@@ -1,11 +1,11 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import http from 'http';
-import prisma, { connectDB } from './config/db.js';
+import { connectDB } from './config/db.js';
 
 dotenv.config();
 const app = express();
-app.use(express.json());  // taake req.body mein JSON data padh sako
+app.use(express.json()); 
 
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
