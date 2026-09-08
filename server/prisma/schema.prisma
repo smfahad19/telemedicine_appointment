@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ---------- USERS ----------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role
+  phone        String?
+  profileImage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  doctorProfile DoctorProfile?
+
+  appointments   Appointment[]   @relation("PatientAppointments")
+  medicalRecords MedicalRecord[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  reviews        Review[]        @relation("PatientReviews")
+  sentMessages   ChatMessage[]   @relation("SentChatMessages")
+}
+
+// ---------- DOCTOR ----------
+
+model DoctorProfile {
+  id              String              @id @default(uuid())
+  userId          String              @unique
+  user            User                @relation(fields: [userId], references: [id])
+  specialty       String
+  bio             String?
+  experienceYears Int?
+  consultationFee Float
+  isOnline        Boolean             @default(false)
+  isVerified      VerificationStatus  @default(PENDING)
+  licenseNumber   String?
+  createdAt       DateTime            @default(now())
+
+  documents    DoctorDocument[]
+  availability Availability[]
+  appointments Appointment[]    @relation("DoctorAppointments")
+  payouts      Payout[]
+  reviews      Review[]         @relation("DoctorReviews")
+
+  @@index([specialty])
+}
+
+model DoctorDocument {
+  id           String             @id @default(uuid())
+  doctorId     String
+  doctor       DoctorProfile      @relation(fields: [doctorId], references: [id])
+  documentType String             // "license", "certificate", "id_proof"
+  fileUrl      String
+  status       VerificationStatus @default(PENDING)
+  uploadedAt   DateTime           @default(now())
+}
+
+model Availability {
+  id        String        @id @default(uuid())
+  doctorId  String
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id])
+  dayOfWeek Int           // 0 = Sunday ... 6 = Saturday
+  startTime String        // "09:00"
+  endTime   String        // "17:00"
+  isActive  Boolean       @default(true)
+}
+
+// ---------- APPOINTMENTS & VIDEO CALL ----------
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String
+  patient         User              @relation("PatientAppointments", fields: [patientId], references: [id])
+  doctorId        String
+  doctor          DoctorProfile     @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  scheduledAt     DateTime
+  status          AppointmentStatus @default(PENDING)
+  intakeNotes     Json?
+  consultationFee Float
+  createdAt       DateTime          @default(now())
+
+  consultation Consultation?
+  prescription Prescription?
+  payment      Payment?
+  review       Review?
+  chatMessages ChatMessage[]
+
+  @@index([scheduledAt])
+}
+
+model Consultation {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  roomId        String
+  startedAt     DateTime?
+  endedAt       DateTime?
+  durationSecs  Int?
+  recordingUrl  String?
+}
+
+model ChatMessage {
+  id            String      @id @default(uuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  senderId      String
+  sender        User        @relation("SentChatMessages", fields: [senderId], references: [id])
+  message       String?
+  fileUrl       String?
+  sentAt        DateTime    @default(now())
+}
+
+// ---------- PRESCRIPTIONS & RECORDS ----------
+
+model Prescription {
+  id             String      @id @default(uuid())
+  appointmentId  String      @unique
+  appointment    Appointment @relation(fields: [appointmentId], references: [id])
+  diagnosis      String?
+  diagnosisCode  String?
+  medicines      Json        // [{ name, dosage, frequency, duration }]
+  followUpDate   DateTime?
+  pdfUrl         String?
+  createdAt      DateTime    @default(now())
+}
+
+model MedicalRecord {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     User     @relation(fields: [patientId], references: [id])
+  fileUrl     String
+  fileType    String
+  description String?
+  uploadedAt  DateTime @default(now())
+}
+
+// ---------- PAYMENTS & PAYOUTS ----------
+
+model Payment {
+  id              String        @id @default(uuid())
+  appointmentId   String        @unique
+  appointment     Appointment   @relation(fields: [appointmentId], references: [id])
+  amount          Float
+  platformFee     Float
+  doctorEarning   Float
+  stripePaymentId String?
+  status          PaymentStatus @default(PENDING)
+  refundReason    String?
+  refundedAt      DateTime?
+  createdAt       DateTime      @default(now())
+}
+
+model Payout {
+  id          String       @id @default(uuid())
+  doctorId    String
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id])
+  amount      Float
+  status      PayoutStatus @default(REQUESTED)
+  bankDetails Json?
+  requestedAt DateTime     @default(now())
+  processedAt DateTime?
+}
+
+// ---------- REVIEWS ----------
+
+model Review {
+  id            String        @id @default(uuid())
+  appointmentId String        @unique
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id])
+  patientId     String
+  patient       User          @relation("PatientReviews", fields: [patientId], references: [id])
+  doctorId      String
+  doctor        DoctorProfile @relation("DoctorReviews", fields: [doctorId], references: [id])
+  rating        Int
+  comment       String?
+  createdAt     DateTime      @default(now())
+}
+
+// ---------- NOTIFICATIONS & ADMIN ----------
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  createdAt  DateTime @default(now())
+}
+
+model PlatformSetting {
+  id             String   @id @default(uuid())
+  commissionRate Float    @default(10)
+  updatedAt      DateTime @updatedAt
+}
