@@ -43,18 +43,18 @@ enum VerificationStatus {
 // ---------- USERS ----------
 
 model User {
-  id           String   @id @default(uuid())
+   id           String   @id @default(uuid())
   name         String
   email        String   @unique
-  password     String
+  password     String?
+  googleId     String?  @unique
+  githubId     String?  @unique
   role         Role
   phone        String?
   profileImage String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
   doctorProfile DoctorProfile?
-
   appointments   Appointment[]   @relation("PatientAppointments")
   medicalRecords MedicalRecord[]
   notifications  Notification[]
@@ -77,7 +77,6 @@ model DoctorProfile {
   isVerified      VerificationStatus  @default(PENDING)
   licenseNumber   String?
   createdAt       DateTime            @default(now())
-
   documents    DoctorDocument[]
   availability Availability[]
   appointments Appointment[]    @relation("DoctorAppointments")
