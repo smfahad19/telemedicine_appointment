@@ -8,13 +8,17 @@ import authRoutes from './modules/auth/auth.routes.js';
 import { signalingHandler } from './sockets/signaling.socket.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 import passport from './config/passport.js';
+import adminRoutes from "./modules/admin/admin.routes.js"
 
 dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(passport.initialize())
+
+
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use(errorHandler);
 
